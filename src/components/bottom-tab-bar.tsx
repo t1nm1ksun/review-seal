@@ -1,10 +1,9 @@
 import { Link, useRouterState } from '@tanstack/react-router'
-import { GitPullRequestArrow, Settings, BookMarked } from 'lucide-react'
+import { GitPullRequestArrow, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const tabs = [
   { to: '/prs', label: 'PRs', icon: GitPullRequestArrow },
-  { to: '/repos', label: 'Repos', icon: BookMarked },
   { to: '/settings', label: 'Settings', icon: Settings },
 ] as const
 
