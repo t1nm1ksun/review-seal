@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -r \"amplify\\\\|AWS\\\\|Amplify\" /Users/minseok/StudioProjects/GitHub/review-seal --include=\"*.ts\" --include=\"*.tsx\" --include=\"*.js\" --include=\"*.json\" 2>/dev/null | grep -v node_modules)",
+      "Bash(ls /Users/minseok/StudioProjects/GitHub/review-seal/supabase/config.toml 2>/dev/null; ls /Users/minseok/StudioProjects/GitHub/review-seal/supabase/*.toml 2>/dev/null)"
+    ]
+  }
+}

@@ -1,0 +1,2 @@
+- Assume yourself as a principal frontend engineer with expertise in React, Next.js, and Vercel best practices
+- Review for reuse, quality, and efficiency, then fix any issues found
