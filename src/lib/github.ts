@@ -247,39 +247,85 @@ export async function postPRComment(
   }
 }
 
-export async function fetchReviewThreads(
+/** Parse severity counts from PR review comments using GraphQL (supports resolved status) */
+export async function fetchSeverityCounts(
   token: string,
   owner: string,
   repo: string,
   prNumber: number,
-): Promise<{ resolved: number; unresolved: number }> {
-  const res = await fetch(
-    `${GITHUB_API}/repos/${owner}/${repo}/pulls/${prNumber}/comments?per_page=100`,
-    { headers: headers(token) },
-  )
-  if (!res.ok) throw new Error(`GitHub API error: ${res.status}`)
-  const comments = await res.json()
-
-  let resolved = 0
-  let unresolved = 0
-  const threads = new Map<number, boolean>()
-
-  for (const comment of comments) {
-    const threadId = comment.in_reply_to_id ?? comment.id
-    // If a comment has in_reply_to_id and the body contains resolution markers
-    if (comment.position !== null || comment.line !== null) {
-      if (!threads.has(threadId)) {
-        threads.set(threadId, false)
+): Promise<{ p1: number; p2: number; hasReview: boolean }> {
+  const query = `
+    query($owner: String!, $repo: String!, $prNumber: Int!) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $prNumber) {
+          reviewThreads(first: 100) {
+            nodes {
+              isResolved
+              comments(first: 1) {
+                nodes {
+                  body
+                }
+              }
+            }
+          }
+          comments(first: 100) {
+            nodes {
+              body
+            }
+          }
+        }
       }
+    }
+  `
+
+  const res = await fetch('https://api.github.com/graphql', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      query,
+      variables: { owner, repo, prNumber },
+    }),
+  })
+
+  if (!res.ok) return { p1: 0, p2: 0, hasReview: false }
+
+  const json = await res.json()
+  const pr = json.data?.repository?.pullRequest
+  if (!pr) return { p1: 0, p2: 0, hasReview: false }
+
+  let p1 = 0
+  let p2 = 0
+  const severityRegex = /\b(P[1-2])\b/g
+
+  // Review threads (inline comments) — only count unresolved
+  for (const thread of pr.reviewThreads?.nodes ?? []) {
+    if (thread.isResolved) continue
+    const body = thread.comments?.nodes?.[0]?.body ?? ''
+    let match
+    while ((match = severityRegex.exec(body)) !== null) {
+      if (match[1] === 'P1') p1++
+      else if (match[1] === 'P2') p2++
     }
   }
 
-  // Use the GraphQL-like approach: check if review comments have been resolved
-  // For REST API, we approximate by checking if the PR review was dismissed/approved
-  for (const [, isResolved] of threads) {
-    if (isResolved) resolved++
-    else unresolved++
+  // Issue comments (general PR comments)
+  for (const comment of pr.comments?.nodes ?? []) {
+    const body = comment.body ?? ''
+    let match
+    while ((match = severityRegex.exec(body)) !== null) {
+      if (match[1] === 'P1') p1++
+      else if (match[1] === 'P2') p2++
+    }
   }
 
-  return { resolved, unresolved }
+  const allThreads = pr.reviewThreads?.nodes ?? []
+  const allComments = pr.comments?.nodes ?? []
+  const hasReview = allThreads.some((t: { comments?: { nodes?: { body?: string }[] } }) =>
+    /\b(P[1-5])\b/.test(t.comments?.nodes?.[0]?.body ?? ''),
+  ) || allComments.some((c: { body?: string }) => /\b(P[1-5])\b/.test(c.body ?? ''))
+
+  return { p1, p2, hasReview }
 }

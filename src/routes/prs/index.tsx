@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2, Inbox, ChevronDown, Search, Check } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { fetchUserRepos, fetchPullRequests, type GitHubPR } from '@/lib/github'
+import { fetchUserRepos, fetchPullRequests, fetchSeverityCounts, type GitHubPR } from '@/lib/github'
 import { PRCard } from '@/components/pr-card'
 import { DEMO_PRS, DEMO_REPOS } from '@/lib/demo-data'
 import { useReviewingPRs } from '@/contexts/reviewing-store'
@@ -22,7 +22,7 @@ interface PRWithRepo extends GitHubPR {
 }
 
 function PRsPage() {
-  const { githubToken, user, isDemoMode } = useAuth()
+  const { githubToken, isDemoMode } = useAuth()
   const reviewingPRs = useReviewingPRs()
 
   const [repoDropdownOpen, setRepoDropdownOpen] = useState(false)
@@ -70,6 +70,21 @@ function PRsPage() {
             }
           } catch {
             // skip failed repos
+          }
+        }),
+      )
+
+      // Fetch severity counts for each PR
+      await Promise.all(
+        results.map(async pr => {
+          try {
+            const [owner, repo] = pr._repoFullName.split('/')
+            const counts = await fetchSeverityCounts(githubToken, owner, repo, pr.number)
+            pr._p1Unresolved = counts.p1
+            pr._p2Unresolved = counts.p2
+            pr._hasReview = counts.hasReview
+          } catch {
+            // skip
           }
         }),
       )
