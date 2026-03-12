@@ -32,7 +32,7 @@ function PRDetailPage() {
 
   const [tab, setTab] = useState<'diff' | 'review'>('diff')
   const [sheetOpen, setSheetOpen] = useState(false)
-  const [provider, setProvider] = useState<AiProvider>('claude')
+  const [provider, setProvider] = useState<AiProvider>('claude-code')
   const [customInstructions, setCustomInstructions] = useState('')
   const [demoReviewState, setDemoReviewState] = useState<'none' | 'running' | 'completed' | 'posted'>('none')
   const [draftConfirmed, setDraftConfirmed] = useState(false)
