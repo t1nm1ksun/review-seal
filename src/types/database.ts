@@ -262,7 +262,6 @@ export type Database = {
           },
         ]
       }
-    }
       review_notifications: {
         Row: {
           id: string
