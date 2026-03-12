@@ -174,7 +174,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const { supabase } = await import('@/lib/supabase')
     const { error } = await supabase.auth.signOut()
-    if (error) toast.error(`Sign out failed: ${error.message}`)
+    if (error) {
+      toast.error(`Sign out failed: ${error.message}`)
+    } else {
+      setState({
+        user: null,
+        profile: null,
+        session: null,
+        isLoading: false,
+        isAuthenticated: false,
+        githubToken: null,
+        isDemoMode: false,
+      })
+      window.location.href = '/login'
+    }
   }, [state.isDemoMode])
 
   const refreshProfile = useCallback(async () => {
