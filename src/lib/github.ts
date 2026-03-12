@@ -64,7 +64,7 @@ export async function fetchUserRepos(token: string): Promise<GitHubRepo[]> {
 
   while (true) {
     const res = await fetch(
-      `${GITHUB_API}/user/repos?sort=pushed&per_page=100&page=${page}`,
+      `${GITHUB_API}/user/repos?sort=pushed&per_page=100&affiliation=owner,collaborator,organization_member&page=${page}`,
       { headers: headers(token) },
     )
     if (!res.ok) throw new Error(`GitHub API error: ${res.status}`)
