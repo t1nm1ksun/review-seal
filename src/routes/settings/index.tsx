@@ -230,7 +230,7 @@ function SettingsPage() {
             </p>
           ) : (
             <p className="text-xs text-blue-700">
-              Mentions <code className="bg-blue-100 px-1 rounded">@openai-codex</code> on the PR.
+              Mentions <code className="bg-blue-100 px-1 rounded">@codex</code> on the PR.
               Install the Codex GitHub App on each repo.
             </p>
           )}

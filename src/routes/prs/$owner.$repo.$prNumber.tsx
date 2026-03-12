@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Play, Loader2 } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 import { useAuth } from '@/contexts/AuthContext'
-import { fetchPRDetail, fetchPRFiles, checkWorkflowExists, createOrUpdateFile, triggerWorkflowDispatch, postPRComment } from '@/lib/github'
+import { fetchPRDetail, fetchPRFiles, fetchGitHubReview, checkWorkflowExists, createOrUpdateFile, triggerWorkflowDispatch, postPRComment } from '@/lib/github'
 import { WORKFLOW_FILE_NAME, WORKFLOW_PATH, WORKFLOW_CONTENT } from '@/lib/seal-workflow'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -86,55 +86,23 @@ function PRDetailPage() {
     }
   }, [settings])
 
-  // Latest review
-  const { data: latestReview } = useQuery({
-    queryKey: ['latest-review', owner, repo, prNum, demoReviewState],
-    queryFn: async () => {
-      if (isDemoMode) {
-        if (demoReviewState === 'none') return null
-        return {
-          id: 'demo-review-1',
-          status: demoReviewState,
-          summary: demoReviewState === 'completed' || demoReviewState === 'posted'
-            ? DEMO_REVIEW_SUMMARY : null,
-          error_message: null,
-        }
-      }
-      const { supabase } = await import('@/lib/supabase')
-      const { data } = await supabase
-        .from('reviews')
-        .select('*')
-        .eq('user_id', user!.id)
-        .eq('repo_full_name', `${owner}/${repo}`)
-        .eq('pr_number', prNum)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
-      return data
-    },
-    enabled: !!user,
+  // Fetch review from GitHub PR comments
+  const { data: githubReview } = useQuery({
+    queryKey: ['github-review', owner, repo, prNum],
+    queryFn: () => fetchGitHubReview(githubToken!, owner, repo, prNum),
+    enabled: !!githubToken && !isDemoMode,
   })
 
-  // Review comments
-  const { data: reviewComments } = useQuery({
-    queryKey: ['review-comments', latestReview?.id, demoReviewState],
-    queryFn: async () => {
-      if (isDemoMode) {
-        return demoReviewState === 'completed' || demoReviewState === 'posted'
-          ? DEMO_REVIEW_COMMENTS : []
-      }
-      const { supabase } = await import('@/lib/supabase')
-      const { data } = await supabase
-        .from('review_comments')
-        .select('*')
-        .eq('review_id', latestReview!.id)
-        .order('file_path')
-      return data ?? []
-    },
-    enabled: isDemoMode
-      ? (demoReviewState === 'completed' || demoReviewState === 'posted')
-      : (!!latestReview?.id && latestReview.status === 'completed'),
-  })
+  // Demo review state
+  const demoReview = isDemoMode && (demoReviewState === 'completed' || demoReviewState === 'posted')
+    ? { summary: DEMO_REVIEW_SUMMARY, comments: DEMO_REVIEW_COMMENTS, hasReview: true }
+    : null
+
+  const latestReview = isDemoMode
+    ? (demoReviewState !== 'none' ? { id: 'demo', status: demoReviewState, summary: demoReview?.summary ?? null, error_message: null } : null)
+    : (githubReview?.hasReview ? { id: 'github', status: 'completed' as const, summary: githubReview.summary, error_message: null } : null)
+
+  const reviewComments = isDemoMode ? (demoReview?.comments ?? []) : (githubReview?.comments ?? [])
 
   // Sync review status with global store + toast on completion (non-demo)
   const prevStatusRef = useState<string | null>(null)
@@ -226,7 +194,7 @@ function PRDetailPage() {
         )
       } else {
         // Codex: post a mention comment on the PR
-        let body = '@openai-codex review this PR.'
+        let body = '@codex review this PR.'
         if (customInstructions) {
           body += `\n\n${customInstructions}`
         }
@@ -381,7 +349,7 @@ function PRDetailPage() {
               </p>
             ) : (
               <p className="text-xs text-blue-700">
-                Mentions <code className="bg-blue-100 px-1 rounded">@openai-codex</code> on the PR.
+                Mentions <code className="bg-blue-100 px-1 rounded">@codex</code> on the PR.
                 Requires Codex GitHub App installed on the repo.
               </p>
             )}

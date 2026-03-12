@@ -329,3 +329,101 @@ export async function fetchSeverityCounts(
 
   return { p1, p2, hasReview }
 }
+
+export interface GitHubReviewComment {
+  id: string
+  file_path: string
+  start_line: number | null
+  end_line: number | null
+  body: string
+  severity: 'P1' | 'P2' | 'P3' | 'P4' | 'P5'
+}
+
+/** Fetch review data from GitHub PR comments (inline threads + issue comments) */
+export async function fetchGitHubReview(
+  token: string,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<{ summary: string | null; comments: GitHubReviewComment[]; hasReview: boolean }> {
+  const query = `
+    query($owner: String!, $repo: String!, $prNumber: Int!) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $prNumber) {
+          reviewThreads(first: 100) {
+            nodes {
+              isResolved
+              comments(first: 10) {
+                nodes {
+                  id
+                  body
+                  path
+                  startLine
+                  line
+                }
+              }
+            }
+          }
+          comments(first: 100) {
+            nodes {
+              id
+              body
+            }
+          }
+        }
+      }
+    }
+  `
+
+  const res = await fetch('https://api.github.com/graphql', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      query,
+      variables: { owner, repo, prNumber },
+    }),
+  })
+
+  if (!res.ok) return { summary: null, comments: [], hasReview: false }
+
+  const json = await res.json()
+  const pr = json.data?.repository?.pullRequest
+  if (!pr) return { summary: null, comments: [], hasReview: false }
+
+  const severityRegex = /\b(P[1-5])\b/
+  const comments: GitHubReviewComment[] = []
+  let summary: string | null = null
+
+  // Inline review thread comments
+  for (const thread of pr.reviewThreads?.nodes ?? []) {
+    for (const c of thread.comments?.nodes ?? []) {
+      const match = severityRegex.exec(c.body ?? '')
+      if (match) {
+        comments.push({
+          id: c.id,
+          file_path: c.path ?? '',
+          start_line: c.startLine ?? c.line ?? null,
+          end_line: c.line ?? null,
+          body: c.body,
+          severity: match[1] as GitHubReviewComment['severity'],
+        })
+      }
+    }
+  }
+
+  // Issue comments — look for summary (longest comment with severity mentions)
+  for (const c of pr.comments?.nodes ?? []) {
+    if (severityRegex.test(c.body ?? '')) {
+      if (!summary || c.body.length > summary.length) {
+        summary = c.body
+      }
+    }
+  }
+
+  const hasReview = comments.length > 0 || summary !== null
+
+  return { summary, comments, hasReview }
+}
