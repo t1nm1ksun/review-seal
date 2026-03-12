@@ -1,10 +1,11 @@
 import { Link, useRouterState } from '@tanstack/react-router'
-import { GitPullRequestArrow, Settings, LogOut } from 'lucide-react'
+import { GitPullRequestArrow, Settings, LogOut, BookMarked } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 
 const navItems = [
   { to: '/prs', label: 'Pull Requests', icon: GitPullRequestArrow },
+  { to: '/repos', label: 'Repositories', icon: BookMarked },
   { to: '/settings', label: 'Settings', icon: Settings },
 ] as const
 
