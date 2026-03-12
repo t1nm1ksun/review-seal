@@ -263,6 +263,88 @@ export type Database = {
         ]
       }
     }
+      review_notifications: {
+        Row: {
+          id: string
+          user_id: string
+          repo_full_name: string
+          pr_number: number
+          pr_title: string | null
+          comment_body: string | null
+          comment_url: string | null
+          severity: string | null
+          read: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          repo_full_name: string
+          pr_number: number
+          pr_title?: string | null
+          comment_body?: string | null
+          comment_url?: string | null
+          severity?: string | null
+          read?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          repo_full_name?: string
+          pr_number?: number
+          pr_title?: string | null
+          comment_body?: string | null
+          comment_url?: string | null
+          severity?: string | null
+          read?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      repo_webhooks: {
+        Row: {
+          id: string
+          user_id: string
+          repo_full_name: string
+          webhook_id: number
+          webhook_secret: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          repo_full_name: string
+          webhook_id: number
+          webhook_secret: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          repo_full_name?: string
+          webhook_id?: number
+          webhook_secret?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repo_webhooks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     Views: {
       [_ in never]: never
     }

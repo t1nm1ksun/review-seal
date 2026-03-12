@@ -98,9 +98,9 @@ function PRDetailPage() {
     ? { summary: DEMO_REVIEW_SUMMARY, comments: DEMO_REVIEW_COMMENTS, hasReview: true }
     : null
 
-  const latestReview = isDemoMode
+  const latestReview: { id: string; status: string; summary: string | null; error_message: string | null } | null = isDemoMode
     ? (demoReviewState !== 'none' ? { id: 'demo', status: demoReviewState, summary: demoReview?.summary ?? null, error_message: null } : null)
-    : (githubReview?.hasReview ? { id: 'github', status: 'completed' as const, summary: githubReview.summary, error_message: null } : null)
+    : (githubReview?.hasReview ? { id: 'github', status: 'completed', summary: githubReview.summary, error_message: null } : null)
 
   const reviewComments = isDemoMode ? (demoReview?.comments ?? []) : (githubReview?.comments ?? [])
 
