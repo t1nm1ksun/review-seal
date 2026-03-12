@@ -83,10 +83,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (!mounted) return
 
           if (session && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
-            try {
-              const profile = await fetchProfile(session.user.id)
-              let providerToken = session.provider_token ?? null
+            let profile: Profile | null = null
+            let providerToken = session.provider_token ?? null
 
+            try {
+              profile = await fetchProfile(session.user.id)
+            } catch {
+              // Profile may not exist yet — build from user metadata
+              const meta = session.user.user_metadata
+              profile = {
+                id: session.user.id,
+                username: meta?.user_name ?? meta?.preferred_username ?? session.user.email?.split('@')[0] ?? 'user',
+                display_name: meta?.full_name ?? meta?.name ?? null,
+                avatar_url: meta?.avatar_url ?? null,
+                github_url: meta?.user_name ? `https://github.com/${meta.user_name}` : null,
+              }
+            }
+
+            try {
               if (providerToken) {
                 await supabase
                   .from('user_settings')
@@ -95,7 +109,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     github_token_encrypted: providerToken,
                   }, { onConflict: 'user_id' })
               } else {
-                // Reload saved token on refresh / token refresh
                 const { data: settings } = await supabase
                   .from('user_settings')
                   .select('github_token_encrypted')
@@ -103,19 +116,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   .single()
                 providerToken = settings?.github_token_encrypted ?? null
               }
-
-              setState({
-                user: session.user,
-                profile,
-                session,
-                isLoading: false,
-                isAuthenticated: true,
-                githubToken: providerToken,
-                isDemoMode: false,
-              })
             } catch {
-              setState(prev => ({ ...prev, isLoading: false }))
+              // user_settings may not exist yet — continue without token
             }
+
+            setState({
+              user: session.user,
+              profile,
+              session,
+              isLoading: false,
+              isAuthenticated: true,
+              githubToken: providerToken,
+              isDemoMode: false,
+            })
           } else if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
             setState({
               user: null,
