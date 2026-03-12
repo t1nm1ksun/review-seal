@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (session && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
             try {
               const profile = await fetchProfile(session.user.id)
-              const providerToken = session.provider_token ?? null
+              let providerToken = session.provider_token ?? null
 
               if (providerToken) {
                 await supabase
@@ -94,6 +94,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     user_id: session.user.id,
                     github_token_encrypted: providerToken,
                   }, { onConflict: 'user_id' })
+              } else {
+                // Reload saved token on refresh / token refresh
+                const { data: settings } = await supabase
+                  .from('user_settings')
+                  .select('github_token_encrypted')
+                  .eq('user_id', session.user.id)
+                  .single()
+                providerToken = settings?.github_token_encrypted ?? null
               }
 
               setState({
