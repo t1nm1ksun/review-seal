@@ -67,69 +67,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const initAuth = async () => {
       const { supabase } = await import('@/lib/supabase')
-      const { supabasePublic } = await import('@/lib/supabase')
 
-      const fetchProfile = async (userId: string) => {
-        const { data } = await supabasePublic
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single()
-        return data as Profile | null
+      const buildProfile = (user: User): Profile => {
+        const meta = user.user_metadata
+        return {
+          id: user.id,
+          username: meta?.user_name ?? meta?.preferred_username ?? user.email?.split('@')[0] ?? 'user',
+          display_name: meta?.full_name ?? meta?.name ?? null,
+          avatar_url: meta?.avatar_url ?? null,
+          github_url: meta?.user_name ? `https://github.com/${meta.user_name}` : null,
+        }
       }
 
+      const resolveSession = async (session: Session) => {
+        const profile = buildProfile(session.user)
+        let providerToken = session.provider_token ?? null
+
+        try {
+          if (providerToken) {
+            await supabase
+              .from('user_settings')
+              .upsert({
+                user_id: session.user.id,
+                github_token_encrypted: providerToken,
+              }, { onConflict: 'user_id' })
+          } else {
+            const { data: settings } = await supabase
+              .from('user_settings')
+              .select('github_token_encrypted')
+              .eq('user_id', session.user.id)
+              .single()
+            providerToken = settings?.github_token_encrypted ?? null
+          }
+        } catch {
+          // continue without token
+        }
+
+        if (!mounted) return
+        setState({
+          user: session.user,
+          profile,
+          session,
+          isLoading: false,
+          isAuthenticated: true,
+          githubToken: providerToken,
+          isDemoMode: false,
+        })
+      }
+
+      // Explicitly check existing session first (handles refresh)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        await resolveSession(session)
+      } else if (mounted) {
+        setState(prev => ({ ...prev, isLoading: false }))
+      }
+
+      // Listen for future auth changes (sign in, sign out, token refresh)
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
           if (!mounted) return
-
-          if (session && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
-            let profile: Profile | null = null
-            let providerToken = session.provider_token ?? null
-
-            try {
-              profile = await fetchProfile(session.user.id)
-            } catch {
-              // Profile may not exist yet — build from user metadata
-              const meta = session.user.user_metadata
-              profile = {
-                id: session.user.id,
-                username: meta?.user_name ?? meta?.preferred_username ?? session.user.email?.split('@')[0] ?? 'user',
-                display_name: meta?.full_name ?? meta?.name ?? null,
-                avatar_url: meta?.avatar_url ?? null,
-                github_url: meta?.user_name ? `https://github.com/${meta.user_name}` : null,
-              }
-            }
-
-            try {
-              if (providerToken) {
-                await supabase
-                  .from('user_settings')
-                  .upsert({
-                    user_id: session.user.id,
-                    github_token_encrypted: providerToken,
-                  }, { onConflict: 'user_id' })
-              } else {
-                const { data: settings } = await supabase
-                  .from('user_settings')
-                  .select('github_token_encrypted')
-                  .eq('user_id', session.user.id)
-                  .single()
-                providerToken = settings?.github_token_encrypted ?? null
-              }
-            } catch {
-              // user_settings may not exist yet — continue without token
-            }
-
-            setState({
-              user: session.user,
-              profile,
-              session,
-              isLoading: false,
-              isAuthenticated: true,
-              githubToken: providerToken,
-              isDemoMode: false,
-            })
-          } else if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            if (session) await resolveSession(session)
+          } else if (event === 'SIGNED_OUT') {
             setState({
               user: null,
               profile: null,

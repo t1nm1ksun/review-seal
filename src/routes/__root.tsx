@@ -9,12 +9,13 @@ export const Route = createRootRoute({
 })
 
 function RootLayout() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isLoading } = useAuth()
   const router = useRouterState()
   const isAuthRoute = router.location.pathname.startsWith('/login') ||
     router.location.pathname.startsWith('/auth')
 
-  const showNav = isAuthenticated && !isAuthRoute
+  // Keep nav visible during loading if not on auth routes
+  const showNav = (isAuthenticated || isLoading) && !isAuthRoute
 
   return (
     <>

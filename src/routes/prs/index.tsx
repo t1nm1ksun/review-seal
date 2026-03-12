@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2, Inbox, ChevronDown, Search, Check } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { fetchPullRequests, type GitHubPR } from '@/lib/github'
+import { fetchUserRepos, fetchPullRequests, type GitHubPR } from '@/lib/github'
 import { PRCard } from '@/components/pr-card'
 import { DEMO_PRS, DEMO_REPOS } from '@/lib/demo-data'
 import { useReviewingPRs } from '@/contexts/reviewing-store'
@@ -41,37 +41,30 @@ function PRsPage() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  // Monitored repos
-  const { data: monitored } = useQuery({
-    queryKey: ['monitored-repos', user?.id],
-    queryFn: async () => {
-      const { supabase } = await import('@/lib/supabase')
-      const { data } = await supabase
-        .from('monitored_repos')
-        .select('*')
-        .eq('user_id', user!.id)
-      return data ?? []
-    },
-    enabled: !!user && !isDemoMode,
+  // Fetch all user repos from GitHub
+  const { data: githubRepos } = useQuery({
+    queryKey: ['github-repos', githubToken],
+    queryFn: () => fetchUserRepos(githubToken!),
+    enabled: !!githubToken && !isDemoMode,
   })
 
-  const monitoredNames = isDemoMode
+  const repoNames = isDemoMode
     ? new Set(DEMO_REPOS.map(r => r.full_name))
-    : new Set(monitored?.map(r => r.full_name) ?? [])
+    : new Set(githubRepos?.map(r => r.full_name) ?? [])
 
-  // PRs from monitored repos
+  // PRs from all repos
   const { data: prs, isLoading } = useQuery({
-    queryKey: ['all-prs', isDemoMode ? 'demo' : monitored?.map(r => r.full_name)],
+    queryKey: ['all-prs', isDemoMode ? 'demo' : githubRepos?.map(r => r.full_name)],
     queryFn: async (): Promise<PRWithRepo[]> => {
       if (isDemoMode) return DEMO_PRS
 
-      if (!monitored || !githubToken) return []
+      if (!githubRepos || !githubToken) return []
       const results: PRWithRepo[] = []
 
       await Promise.all(
-        monitored.map(async repo => {
+        githubRepos.map(async repo => {
           try {
-            const repoPrs = await fetchPullRequests(githubToken, repo.owner, repo.name)
+            const repoPrs = await fetchPullRequests(githubToken, repo.owner.login, repo.name)
             for (const pr of repoPrs) {
               results.push({ ...pr, _repoFullName: repo.full_name })
             }
@@ -85,14 +78,14 @@ function PRsPage() {
         (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
       )
     },
-    enabled: isDemoMode || (!!monitored && monitored.length > 0 && !!githubToken),
+    enabled: isDemoMode || (!!githubRepos && githubRepos.length > 0 && !!githubToken),
   })
 
   const filteredPrs = selectedRepos
     ? prs?.filter(pr => selectedRepos.has((pr as PRWithRepo)._repoFullName))
     : prs
 
-  const monitoredRepoList = [...monitoredNames].filter(name =>
+  const repoList = [...repoNames].filter(name =>
     name.toLowerCase().includes(repoSearch.toLowerCase()),
   )
 
@@ -102,7 +95,7 @@ function PRsPage() {
     setSelectedRepos(prev => {
       // If currently "all", start with all checked except this one
       if (!prev) {
-        const next = new Set(monitoredNames)
+        const next = new Set(repoNames)
         next.delete(name)
         return next
       }
@@ -113,7 +106,7 @@ function PRsPage() {
         next.add(name)
       }
       // If all are selected, go back to null (= all)
-      if (next.size === monitoredNames.size) return null
+      if (next.size === repoNames.size) return null
       return next
     })
   }
@@ -147,7 +140,7 @@ function PRsPage() {
             onClick={() => setRepoDropdownOpen(!repoDropdownOpen)}
           >
             {allSelected
-              ? `All repos (${monitoredNames.size})`
+              ? `All repos (${repoNames.size})`
               : `${selectedRepos!.size} repos`}
             <ChevronDown size={12} />
           </button>
@@ -180,7 +173,7 @@ function PRsPage() {
                   All repos
                 </button>
 
-                {monitoredRepoList.map(name => {
+                {repoList.map(name => {
                   const isChecked = allSelected || selectedRepos!.has(name)
                   return (
                     <button
@@ -210,7 +203,7 @@ function PRsPage() {
         <div className="flex flex-col items-center justify-center py-16 text-gray-400">
           <Inbox size={40} className="mb-3" />
           <p className="text-sm">No open pull requests</p>
-          {monitoredNames.size === 0 && !isDemoMode && (
+          {repoNames.size === 0 && !isDemoMode && (
             <p className="text-xs mt-1">Add repositories from the dropdown above</p>
           )}
         </div>
