@@ -247,6 +247,51 @@ export async function postPRComment(
   }
 }
 
+/** Install a GitHub webhook on a repo for review notifications */
+export async function installWebhook(
+  token: string,
+  owner: string,
+  repo: string,
+  webhookUrl: string,
+  secret: string,
+): Promise<number> {
+  // Check if webhook already exists
+  const listRes = await fetch(
+    `${GITHUB_API}/repos/${owner}/${repo}/hooks`,
+    { headers: headers(token) },
+  )
+  if (listRes.ok) {
+    const hooks = await listRes.json()
+    const existing = hooks.find((h: { config?: { url?: string } }) => h.config?.url === webhookUrl)
+    if (existing) return existing.id
+  }
+
+  const res = await fetch(
+    `${GITHUB_API}/repos/${owner}/${repo}/hooks`,
+    {
+      method: 'POST',
+      headers: headers(token),
+      body: JSON.stringify({
+        name: 'web',
+        active: true,
+        events: ['issue_comment', 'pull_request_review_comment'],
+        config: {
+          url: webhookUrl,
+          content_type: 'json',
+          secret,
+          insecure_ssl: '0',
+        },
+      }),
+    },
+  )
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Failed to install webhook: ${res.status} ${text}`)
+  }
+  const data = await res.json()
+  return data.id
+}
+
 /** Parse severity counts from PR review comments using GraphQL (supports resolved status) */
 export async function fetchSeverityCounts(
   token: string,

@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Play, Loader2 } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 import { useAuth } from '@/contexts/AuthContext'
-import { fetchPRDetail, fetchPRFiles, fetchGitHubReview, checkWorkflowExists, createOrUpdateFile, triggerWorkflowDispatch, postPRComment } from '@/lib/github'
+import { fetchPRDetail, fetchPRFiles, fetchGitHubReview, checkWorkflowExists, createOrUpdateFile, triggerWorkflowDispatch, postPRComment, installWebhook } from '@/lib/github'
 import { WORKFLOW_FILE_NAME, WORKFLOW_PATH, WORKFLOW_CONTENT } from '@/lib/seal-workflow'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -169,6 +169,33 @@ function PRDetailPage() {
       }
 
       if (!githubToken) throw new Error('GitHub token required')
+
+      // Auto-install webhook for review notifications
+      try {
+        const { supabase } = await import('@/lib/supabase')
+        const repoFullName = `${owner}/${repo}`
+        const { data: existingWebhook } = await supabase
+          .from('repo_webhooks')
+          .select('id')
+          .eq('user_id', user!.id)
+          .eq('repo_full_name', repoFullName)
+          .single()
+
+        if (!existingWebhook) {
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+          const webhookUrl = `${supabaseUrl}/functions/v1/github-webhook`
+          const secret = crypto.randomUUID()
+          const webhookId = await installWebhook(githubToken, owner, repo, webhookUrl, secret)
+          await supabase.from('repo_webhooks').upsert({
+            user_id: user!.id,
+            repo_full_name: repoFullName,
+            webhook_id: webhookId,
+            webhook_secret: secret,
+          }, { onConflict: 'user_id,repo_full_name' })
+        }
+      } catch {
+        // Webhook install failed — not critical, continue with review
+      }
 
       if (provider === 'claude-code') {
         // Check if workflow exists, install if not
